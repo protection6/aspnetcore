@@ -121,6 +121,9 @@ internal partial class RazorComponentEndpointInvoker : IRazorComponentEndpointIn
             await _renderer.SendStreamingUpdatesAsync(context, quiesceTask, bufferWriter);
         }
 
+        var persistenceContent = await _renderer.PrerenderPersistedStateAsync(context);
+        persistenceContent.WriteTo(bufferWriter, HtmlEncoder.Default);
+
         // Invoke FlushAsync to ensure any buffered content is asynchronously written to the underlying
         // response asynchronously. In the absence of this line, the buffer gets synchronously written to the
         // response as part of the Dispose which has a perf impact.

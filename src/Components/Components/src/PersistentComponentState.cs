@@ -7,6 +7,13 @@ using static Microsoft.AspNetCore.Internal.LinkerFlags;
 
 namespace Microsoft.AspNetCore.Components;
 
+public class PersistenceCallbackRegistration(
+    Func<Task> callback, IComponentRenderMode? renderMode)
+{
+    public Func<Task> Callback => callback;
+    public IComponentRenderMode? RenderMode => renderMode;
+}
+
 /// <summary>
 /// The state for the components and services of a components application.
 /// </summary>
@@ -15,11 +22,11 @@ public class PersistentComponentState
     private IDictionary<string, byte[]>? _existingState;
     private readonly IDictionary<string, byte[]> _currentState;
 
-    private readonly List<Func<Task>> _registeredCallbacks;
+    private readonly List<PersistenceCallbackRegistration> _registeredCallbacks;
 
     internal PersistentComponentState(
         IDictionary<string, byte[]> currentState,
-        List<Func<Task>> pauseCallbacks)
+        List<PersistenceCallbackRegistration> pauseCallbacks)
     {
         _currentState = currentState;
         _registeredCallbacks = pauseCallbacks;
@@ -43,12 +50,22 @@ public class PersistentComponentState
     /// <param name="callback">The callback to invoke when the application is being paused.</param>
     /// <returns>A subscription that can be used to unregister the callback when disposed.</returns>
     public PersistingComponentStateSubscription RegisterOnPersisting(Func<Task> callback)
+        => RegisterOnPersisting(callback, null);
+
+    /// <summary>
+    /// Register a callback to persist the component state when the application is about to be paused.
+    /// Registered callbacks can use this opportunity to persist their state so that it can be retrieved when the application resumes.
+    /// </summary>
+    /// <param name="callback">The callback to invoke when the application is being paused.</param>
+    /// <returns>A subscription that can be used to unregister the callback when disposed.</returns>
+    public PersistingComponentStateSubscription RegisterOnPersisting(Func<Task> callback, IComponentRenderMode? renderMode)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        _registeredCallbacks.Add(callback);
+        var entry = new PersistenceCallbackRegistration(callback, renderMode);
+        _registeredCallbacks.Add(entry);
 
-        return new PersistingComponentStateSubscription(_registeredCallbacks, callback);
+        return new PersistingComponentStateSubscription(_registeredCallbacks, entry);
     }
 
     /// <summary>

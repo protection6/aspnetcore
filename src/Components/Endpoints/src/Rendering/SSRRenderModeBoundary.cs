@@ -32,6 +32,8 @@ internal class SSRRenderModeBoundary : IComponent
     private IReadOnlyDictionary<string, object?>? _latestParameters;
     private string? _markerKey;
 
+    public IComponentRenderMode Mode => _renderMode;
+
     public SSRRenderModeBoundary(
         HttpContext httpContext,
         [DynamicallyAccessedMembers(Component)] Type componentType,

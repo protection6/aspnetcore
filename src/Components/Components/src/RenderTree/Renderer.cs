@@ -133,7 +133,7 @@ public abstract partial class Renderer : IDisposable, IAsyncDisposable
     protected ComponentState GetComponentState(int componentId)
         => GetRequiredComponentState(componentId);
 
-    internal ComponentState GetComponentState(IComponent component)
+    protected internal ComponentState GetComponentState(IComponent component)
         => _componentStateByComponent.GetValueOrDefault(component);
 
     private async void RenderRootComponentsOnHotReload()

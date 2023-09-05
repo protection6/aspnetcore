@@ -11,10 +11,10 @@ namespace Microsoft.AspNetCore.Components;
 /// </summary>
 public readonly struct PersistingComponentStateSubscription : IDisposable
 {
-    private readonly List<Func<Task>>? _callbacks;
-    private readonly Func<Task>? _callback;
+    private readonly List<PersistenceCallbackRegistration>? _callbacks;
+    private readonly PersistenceCallbackRegistration? _callback;
 
-    internal PersistingComponentStateSubscription(List<Func<Task>> callbacks, Func<Task> callback)
+    internal PersistingComponentStateSubscription(List<PersistenceCallbackRegistration> callbacks, PersistenceCallbackRegistration callback)
     {
         _callbacks = callbacks;
         _callback = callback;

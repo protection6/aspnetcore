@@ -53,8 +53,63 @@ internal partial class EndpointHtmlRenderer
 
         // Finally, persist the state and return the HTML content
         var manager = _httpContext.RequestServices.GetRequiredService<ComponentStatePersistenceManager>();
-        await manager.PersistStateAsync(store, Dispatcher);
-        return new ComponentStateHtmlContent(store);
+        await manager.PersistStateAsync(store, Dispatcher, static (_, _) => true);
+        return new ComponentStateHtmlContent(
+            serializationMode == PersistedStateSerializationMode.Server ? store : null,
+            serializationMode == PersistedStateSerializationMode.WebAssembly ? store : null);
+    }
+
+    public async ValueTask<IHtmlContent> PrerenderPersistedStateAsync(HttpContext httpContext)
+    {
+        SetHttpContext(httpContext);
+
+        var manager = _httpContext.RequestServices.GetRequiredService<ComponentStatePersistenceManager>();
+
+        var serverStore = new ProtectedPrerenderComponentApplicationStore(_httpContext.RequestServices.GetRequiredService<IDataProtectionProvider>());
+        await manager.PersistStateAsync(serverStore, Dispatcher, IncludeInServerStore);
+
+        var webAssemblyStore = new PrerenderComponentApplicationStore();
+        await manager.PersistStateAsync(webAssemblyStore, Dispatcher, IncludeInWebAssemblyStore);
+
+        return new ComponentStateHtmlContent(serverStore, webAssemblyStore);
+
+        bool IncludeInServerStore(object? target, IComponentRenderMode? componentRenderMode)
+        {
+            // If the registration specified a rendermode, use that to make the decision
+            // If not, but the target is a component, match based on its rendermode
+            // If not, just don't include the state
+            if (componentRenderMode is not null)
+            {
+                return componentRenderMode is ServerRenderMode or AutoRenderMode;
+            }
+            else if (target is IComponent component && GetComponentState(component) is { } componentState)
+            {
+                var renderModeBoundary = GetClosestRenderModeBoundary(componentState.ComponentId);
+                return renderModeBoundary is not null && renderModeBoundary.Mode is ServerRenderMode or AutoRenderMode;
+            }
+            else
+            {
+                // Alternatively we could return true here, since it's safe to put unmatched state in the server store
+                return false;
+            }
+        }
+
+        bool IncludeInWebAssemblyStore(object? target, IComponentRenderMode? componentRenderMode)
+        {
+            if (componentRenderMode is not null)
+            {
+                return componentRenderMode is WebAssemblyRenderMode or AutoRenderMode;
+            }
+            else if (target is IComponent component && GetComponentState(component) is { } componentState)
+            {
+                var renderModeBoundary = GetClosestRenderModeBoundary(componentState.ComponentId);
+                return renderModeBoundary is not null && renderModeBoundary.Mode is WebAssemblyRenderMode or AutoRenderMode;
+            }
+            else
+            {
+                return false;
+            }
+        }
     }
 
     // Internal for test only
@@ -103,24 +158,34 @@ internal partial class EndpointHtmlRenderer
 
     private sealed class ComponentStateHtmlContent : IHtmlContent
     {
-        private PrerenderComponentApplicationStore? _store;
+        private PrerenderComponentApplicationStore? _serverStore;
+        private PrerenderComponentApplicationStore? _webAssemblyStore;
 
         public static ComponentStateHtmlContent Empty { get; }
-            = new ComponentStateHtmlContent(null);
+            = new ComponentStateHtmlContent(null, null);
 
-        public ComponentStateHtmlContent(PrerenderComponentApplicationStore? store)
+        public ComponentStateHtmlContent(PrerenderComponentApplicationStore? serverStore, PrerenderComponentApplicationStore? webAssemblyStore)
         {
-            _store = store;
+            _serverStore = serverStore;
+            _webAssemblyStore = webAssemblyStore;
         }
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder)
         {
-            if (_store != null)
+            if (_serverStore != null && _serverStore.PersistedState is not null)
             {
-                writer.Write("<!--Blazor-Component-State:");
-                writer.Write(_store.PersistedState);
+                writer.Write("<!--Blazor-Server-Component-State:");
+                writer.Write(_serverStore.PersistedState);
                 writer.Write("-->");
-                _store = null;
+                _serverStore = null;
+            }
+
+            if (_webAssemblyStore != null && _webAssemblyStore.PersistedState is not null)
+            {
+                writer.Write("<!--Blazor-WebAssembly-Component-State:");
+                writer.Write(_webAssemblyStore.PersistedState);
+                writer.Write("-->");
+                _webAssemblyStore = null;
             }
         }
     }
