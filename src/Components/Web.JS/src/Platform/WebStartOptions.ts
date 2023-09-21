@@ -7,6 +7,7 @@ import { SsrStartOptions } from './SsrStartOptions';
 import { LogLevel } from './Logging/Logger';
 
 export interface WebStartOptions {
+  enableClassicInitializers?: boolean;
   circuit: CircuitStartOptions;
   webAssembly: WebAssemblyStartOptions;
   logLevel?: LogLevel;

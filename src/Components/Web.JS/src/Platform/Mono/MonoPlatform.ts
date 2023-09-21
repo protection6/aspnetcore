@@ -195,7 +195,11 @@ function prepareRuntimeConfig(options: Partial<WebAssemblyStartOptions>, onConfi
     onConfigLoadedCallback?.(loadedConfig);
 
     const initializerArguments = [options, loadedConfig.resources?.extensions ?? {}];
-    await invokeLibraryInitializers('beforeStart', initializerArguments);
+    if (!options?.initializers?.beforeStart) {
+      await invokeLibraryInitializers('beforeStart', initializerArguments);
+    } else {
+      await Promise.all(options.initializers.beforeStart.map((initializer) => initializer(options)));
+    }
   };
 
   const moduleConfig = (window['Module'] || {}) as typeof Module;

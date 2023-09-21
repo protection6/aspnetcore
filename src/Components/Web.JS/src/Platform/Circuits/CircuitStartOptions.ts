@@ -19,6 +19,7 @@ export interface CircuitStartOptions {
   reconnectionOptions: ReconnectionOptions;
   reconnectionHandler?: ReconnectionHandler;
   initializers : ServerInitializers;
+  circuitHandlers: CircuitHandler[];
 }
 
 export function resolveOptions(userOptions?: Partial<CircuitStartOptions>): CircuitStartOptions {
@@ -38,6 +39,11 @@ export interface ReconnectionOptions {
   dialogId: string;
 }
 
+export interface CircuitHandler {
+  onCircuitOpened?: () => void;
+  onCircuitClosed?: () => void;
+}
+
 export interface ReconnectionHandler {
   onConnectionDown(options: ReconnectionOptions, error?: Error): void;
   onConnectionUp(): void;
@@ -48,6 +54,7 @@ const defaultOptions: CircuitStartOptions = {
   configureSignalR: (_) => { },
   logLevel: LogLevel.Warning,
   initializers: { beforeStart: [], afterStarted: [] },
+  circuitHandlers: [],
   reconnectionOptions: {
     maxRetries: 8,
     retryIntervalMilliseconds: 20000,

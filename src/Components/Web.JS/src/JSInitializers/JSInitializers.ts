@@ -51,34 +51,32 @@ export class JSInitializer {
         return;
       }
 
-      const { beforeStart, afterStarted, beforeWebStart, afterWebStarted, beforeWebAssemblyStart, afterWebAssemblyStarted, beforeServerStart, afterServerStarted } = initializer;
       if (!jsInitializer.singleRuntime) {
-        if (beforeStart || afterStarted) {
+        return runMultiRuntimeInitializers(jsInitializer, initializer, initializerArguments);
+      } else {
+        const { beforeStart, afterStarted } = initializer;
+        return runClassicInitializers(jsInitializer, beforeStart, afterStarted, initializerArguments);
+      }
+
+      function runMultiRuntimeInitializers(
+        jsInitializer: JSInitializer,
+        initializerModule: Partial<BlazorInitializer>, initializerArguments: unknown[]): void | PromiseLike<void> {
+        const options = initializerArguments[0] as WebStartOptions;
+        const { beforeStart, afterStarted, beforeWebStart, afterWebStarted, beforeWebAssemblyStart, afterWebAssemblyStarted, beforeServerStart, afterServerStarted } = initializerModule;
+        const runtimeSpecificExports = beforeWebStart || afterWebStarted || beforeWebAssemblyStart || afterWebAssemblyStarted || beforeServerStart || afterServerStarted;
+        const hasOnlyClassicInitializers = !runtimeSpecificExports && (beforeStart || afterStarted);
+        const runLegacyInitializers = hasOnlyClassicInitializers && options.enableClassicInitializers;
+        if (hasOnlyClassicInitializers && !options.enableClassicInitializers) {
           // log warning "classic initializers will be ignored when multiple runtimes are used".
           // Skipping "adjustedPath" initializer.
           jsInitializer.logger?.log(
             LogLevel.Warning,
             `Initializer '${adjustedPath}' will be ignored because multiple runtimes are available. use 'before(web|webAssembly|server)Start' and 'after(web|webAssembly|server)Started?' instead.)`
           );
+        } else if (runLegacyInitializers) {
+          return runClassicInitializers(jsInitializer, beforeStart, afterStarted, initializerArguments);
         }
 
-        if (afterWebStarted) {
-          jsInitializer.afterStartedCallbacks.push(afterWebStarted);
-        }
-
-        if (beforeWebAssemblyStart) {
-          const options = initializerArguments[0] as WebStartOptions;
-          if (!options.webAssembly) {
-            options.webAssembly = {} as WebAssemblyStartOptions;
-          }
-          const partialWebAssemblyStartOptions = options.webAssembly as Partial<WebAssemblyStartOptions>;
-          if (!partialWebAssemblyStartOptions.initializers) {
-            partialWebAssemblyStartOptions.initializers = { beforeStart: [], afterStarted: [] };
-          }
-          partialWebAssemblyStartOptions.initializers.beforeStart.push(beforeWebAssemblyStart);
-        }
-
-        const options = initializerArguments[0] as WebStartOptions;
         ensureInitializers(options);
 
         if (beforeWebAssemblyStart) {
@@ -104,7 +102,9 @@ export class JSInitializer {
         if (beforeWebStart) {
           return beforeWebStart(options);
         }
-      } else {
+      }
+
+      function runClassicInitializers(jsInitializer: JSInitializer, beforeStart: BeforeBlazorStartedCallback | undefined, afterStarted: AfterBlazorStartedCallback | undefined, initializerArguments: unknown[]): void | PromiseLike<void> {
         if (afterStarted) {
           jsInitializer.afterStartedCallbacks.push(afterStarted);
         }
@@ -139,4 +139,5 @@ export class JSInitializer {
 
 type OptionsWithInitializers = {
   webAssembly: WebAssemblyStartOptions & { initializers: WebAssemblyInitializers },
-  circuit: CircuitStartOptions & { initializers: ServerInitializers }}
+  circuit: CircuitStartOptions & { initializers: ServerInitializers }
+}

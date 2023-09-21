@@ -41,7 +41,7 @@ export interface WebAssemblyStartOptions {
 // of boot resource loading can be customized.
 export type WebAssemblyBootResourceType = 'assembly' | 'pdb' | 'dotnetjs' | 'dotnetwasm' | 'globalization' | 'manifest' | 'configuration';
 
-export type BeforeBlazorWebAssemblyStartedCallback = (options: WebAssemblyStartOptions) => Promise<void>;
+export type BeforeBlazorWebAssemblyStartedCallback = (options: Partial<WebAssemblyStartOptions>) => Promise<void>;
 export type AfterBlazorWebAssemblyStartedCallback = (blazor: IBlazor) => Promise<void>;
 
 export type WebAssemblyInitializers = {
