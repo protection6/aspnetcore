@@ -4,9 +4,11 @@
 import { WebAssemblyStartOptions } from './WebAssemblyStartOptions';
 import { CircuitStartOptions } from './Circuits/CircuitStartOptions';
 import { SsrStartOptions } from './SsrStartOptions';
+import { LogLevel } from './Logging/Logger';
 
 export interface WebStartOptions {
   circuit: CircuitStartOptions;
   webAssembly: WebAssemblyStartOptions;
+  logLevel?: LogLevel;
   ssr: SsrStartOptions;
 }

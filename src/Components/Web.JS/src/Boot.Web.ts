@@ -20,16 +20,25 @@ import { WebRootComponentManager } from './Services/WebRootComponentManager';
 import { hasProgrammaticEnhancedNavigationHandler, performProgrammaticEnhancedNavigation } from './Services/NavigationUtils';
 import { attachComponentDescriptorHandler, registerAllComponentDescriptors } from './Rendering/DomMerging/DomSync';
 import { JSEventRegistry } from './Services/JSEventRegistry';
+import { fetchAndInvokeInitializers } from './JSInitializers/JSInitializers.Web';
+import { ConsoleLogger } from './Platform/Logging/Loggers';
+import { LogLevel, Logger } from './Platform/Logging/Logger';
 
 let started = false;
 let rootComponentManager: WebRootComponentManager;
+let logger: Logger;
 
-function boot(options?: Partial<WebStartOptions>) : Promise<void> {
+async function boot(options?: Partial<WebStartOptions>) : Promise<void> {
   if (started) {
     throw new Error('Blazor has already started.');
   }
 
   started = true;
+  options = options || {};
+  options.logLevel ??= LogLevel.Error;
+  logger = new ConsoleLogger(options.logLevel);
+
+  const initializers = await fetchAndInvokeInitializers(options, logger);
 
   Blazor._internal.loadWebAssemblyQuicklyTimeout = 3000;
 
@@ -73,7 +82,7 @@ function boot(options?: Partial<WebStartOptions>) : Promise<void> {
     onInitialDomContentLoaded();
   }
 
-  return Promise.resolve();
+  return initializers.invokeAfterStartedCallbacks(Blazor);
 }
 
 function onInitialDomContentLoaded() {

@@ -1,14 +1,24 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+import { IBlazor } from '../../GlobalExports';
 import { LogLevel } from '../Logging/Logger';
 import { HubConnectionBuilder } from '@microsoft/signalr';
+
+export type BeforeBlazorServerStartedCallback = (options: Partial<CircuitStartOptions>) => Promise<void>;
+export type AfterBlazorServerStartedCallback = (blazor: IBlazor) => Promise<void>;
+
+export type ServerInitializers = {
+  beforeStart: BeforeBlazorServerStartedCallback [],
+  afterStarted: AfterBlazorServerStartedCallback [],
+}
 
 export interface CircuitStartOptions {
   configureSignalR: (builder: HubConnectionBuilder) => void;
   logLevel: LogLevel;
   reconnectionOptions: ReconnectionOptions;
   reconnectionHandler?: ReconnectionHandler;
+  initializers : ServerInitializers;
 }
 
 export function resolveOptions(userOptions?: Partial<CircuitStartOptions>): CircuitStartOptions {
@@ -37,6 +47,7 @@ const defaultOptions: CircuitStartOptions = {
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   configureSignalR: (_) => { },
   logLevel: LogLevel.Warning,
+  initializers: { beforeStart: [], afterStarted: [] },
   reconnectionOptions: {
     maxRetries: 8,
     retryIntervalMilliseconds: 20000,
