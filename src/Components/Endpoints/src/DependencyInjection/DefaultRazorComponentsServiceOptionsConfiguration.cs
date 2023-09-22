@@ -10,7 +10,10 @@ using Microsoft.Extensions.Options;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
-internal class DefaultRazorComponentsServiceOptionsConfiguration(IConfiguration configuration, ILoggerFactory loggerFactory)
+internal class DefaultRazorComponentsServiceOptionsConfiguration(
+    IConfiguration configuration,
+    ILoggerFactory loggerFactory,
+    IWebHostEnvironment environment)
     : IPostConfigureOptions<RazorComponentsServiceOptions>
 {
     public IConfiguration Configuration { get; } = configuration;
@@ -28,5 +31,15 @@ internal class DefaultRazorComponentsServiceOptionsConfiguration(IConfiguration 
             MaxCollectionSize = options.MaxFormMappingCollectionSize,
             MaxKeyBufferSize = options.MaxFormMappingKeySize
         };
+
+        var file = environment.WebRootFileProvider.GetFileInfo($"{environment.ApplicationName}.modules.json");
+
+        if (file.Exists)
+        {
+            // We are going to emit the initializers as JSON, so avoid deserializing them, since we are going to
+            // serialize them again later.
+            using var reader = new StreamReader(file.CreateReadStream());
+            options.JavaScriptInitializers = reader.ReadToEnd();
+        }
     }
 }

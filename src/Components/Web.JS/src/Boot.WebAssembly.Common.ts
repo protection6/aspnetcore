@@ -5,7 +5,7 @@
 import { DotNet } from '@microsoft/dotnet-js-interop';
 import { Blazor } from './GlobalExports';
 import * as Environment from './Environment';
-import { BINDING, monoPlatform, dispatcher } from './Platform/Mono/MonoPlatform';
+import { BINDING, monoPlatform, dispatcher, getInitializer } from './Platform/Mono/MonoPlatform';
 import { renderBatch, getRendererer, attachRootComponentToElement, attachRootComponentToLogicalElement } from './Rendering/Renderer';
 import { SharedMemoryRenderBatch } from './Rendering/RenderBatch/SharedMemoryRenderBatch';
 import { PlatformApi, Pointer } from './Platform/Platform';
@@ -18,6 +18,7 @@ import { MonoConfig } from 'dotnet';
 import { RootComponentManager } from './Services/RootComponentManager';
 
 let options: Partial<WebAssemblyStartOptions> | undefined;
+let initializersPromise: Promise<void>;
 let platformLoadPromise: Promise<void> | undefined;
 let loadedWebAssemblyPlatform = false;
 let started = false;
@@ -47,12 +48,16 @@ export function setWaitForRootComponents(): void {
   waitForRootComponents = true;
 }
 
-export function setWebAssemblyOptions(webAssemblyOptions?: Partial<WebAssemblyStartOptions>) {
+export function setWebAssemblyOptions(initializersReady: Promise<Partial<WebAssemblyStartOptions>>) {
   if (options) {
     throw new Error('WebAssembly options have already been configured.');
   }
+  initializersPromise = setOptions(initializersReady);
 
-  options = webAssemblyOptions;
+  async function setOptions(initializers: Promise<Partial<WebAssemblyStartOptions>>): Promise<void> {
+    const configuredOptions = await initializers;
+    options = configuredOptions;
+  }
 }
 
 export async function startWebAssembly(components: RootComponentManager<WebAssemblyComponentDescriptor>): Promise<void> {
@@ -169,11 +174,8 @@ export async function startWebAssembly(components: RootComponentManager<WebAssem
   platform.callEntryPoint();
   // At this point .NET has been initialized (and has yielded), we can't await the promise becasue it will
   // only end when the app finishes running
-  if (!options?.initializers?.afterStarted) {
-    api.invokeLibraryInitializers('afterStarted', [Blazor]);
-  } else {
-    options.initializers.afterStarted.map(i => i(Blazor));
-  }
+  const initializer = getInitializer();
+  return initializer.invokeAfterStartedCallbacks(Blazor);
 }
 
 export function hasStartedWebAssembly(): boolean {
@@ -186,6 +188,7 @@ export function waitForBootConfigLoaded(): Promise<MonoConfig> {
 
 export function loadWebAssemblyPlatformIfNotStarted(): Promise<void> {
   platformLoadPromise ??= (async () => {
+    await initializersPromise;
     const finalOptions = options ?? {};
     const existingConfig = options?.configureRuntime;
     finalOptions.configureRuntime = (config) => {

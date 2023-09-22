@@ -12,6 +12,9 @@ import { WebAssemblyBootResourceType, WebAssemblyStartOptions } from '../WebAsse
 import { Blazor } from '../../GlobalExports';
 import { DotnetModuleConfig, EmscriptenModule, MonoConfig, ModuleAPI, RuntimeAPI, GlobalizationMode } from 'dotnet';
 import { BINDINGType, MONOType } from 'dotnet/dotnet-legacy';
+import { fetchAndInvokeInitializers } from '../../JSInitializers/JSInitializers.WebAssembly';
+import { JSInitializer } from '../../JSInitializers/JSInitializers';
+import { WebRendererId } from '../../Rendering/WebRendererId';
 
 // initially undefined and only fully initialized after createEmscriptenModuleInstance()
 export let BINDING: BINDINGType = undefined as any;
@@ -20,6 +23,7 @@ export let Module: DotnetModuleConfig & EmscriptenModule = undefined as any;
 export let dispatcher: DotNet.ICallDispatcher = undefined as any;
 let MONO_INTERNAL: any = undefined as any;
 let runtime: RuntimeAPI = undefined as any;
+let jsInitializer: JSInitializer;
 
 const uint64HighOrderShift = Math.pow(2, 32);
 const maxSafeNumberHighPart = Math.pow(2, 21) - 1; // The high-order int32 from Number.MAX_SAFE_INTEGER
@@ -38,6 +42,11 @@ function getValueI32(ptr: number) {
 function getValueFloat(ptr: number) {
   return MONO.getF32(ptr);
 }
+
+export function getInitializer() {
+  return jsInitializer;
+}
+
 function getValueU64(ptr: number) {
   // There is no Module.HEAPU64, and Module.getValue(..., 'i64') doesn't work because the implementation
   // treats 'i64' as being the same as 'i32'. Also we must take care to read both halves as unsigned.
@@ -197,8 +206,14 @@ function prepareRuntimeConfig(options: Partial<WebAssemblyStartOptions>, onConfi
     const initializerArguments = [options, loadedConfig.resources?.extensions ?? {}];
     if (!options?.initializers?.beforeStart) {
       await invokeLibraryInitializers('beforeStart', initializerArguments);
+      jsInitializer = new JSInitializer(
+        /* singleRuntime: */ true,
+        undefined,
+        [(blazor) => invokeLibraryInitializers('afterStarted', [blazor])],
+        WebRendererId.WebAssembly
+      );
     } else {
-      await Promise.all(options.initializers.beforeStart.map((initializer) => initializer(options)));
+      jsInitializer = await fetchAndInvokeInitializers(options);
     }
   };
 

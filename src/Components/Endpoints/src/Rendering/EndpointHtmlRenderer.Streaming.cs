@@ -56,6 +56,7 @@ internal partial class EndpointHtmlRenderer
         try
         {
             await writer.WriteAsync(_ssrFramingCommentMarkup);
+            await EmitInitializersIfNecessary(httpContext, writer);
             await writer.FlushAsync(); // Make sure the initial HTML was sent
             await untilTaskCompleted;
         }
@@ -72,6 +73,17 @@ internal partial class EndpointHtmlRenderer
             await writer.FlushAsync(); // Important otherwise the client won't receive the error message, as we're about to fail the pipeline
             await _httpContext.Response.CompleteAsync();
             throw;
+        }
+    }
+
+    internal async Task EmitInitializersIfNecessary(HttpContext httpContext, TextWriter writer)
+    {
+        if (_options.JavaScriptInitializers != null &&
+            !IsProgressivelyEnhancedNavigation(httpContext.Request))
+        {
+            await writer.WriteAsync("<script id=\"blazor-web-initializers\" type=\"application/json\">");
+            await writer.WriteAsync(_options.JavaScriptInitializers);
+            await writer.WriteAsync("</script>");
         }
     }
 

@@ -6,13 +6,8 @@ import { WebStartOptions } from '../Platform/WebStartOptions';
 import { JSInitializer } from './JSInitializers';
 
 export async function fetchAndInvokeInitializers(options: Partial<WebStartOptions>, logger: Logger) : Promise<JSInitializer> {
-  const jsInitializersResponse = await fetch('_blazor/initializers', {
-    method: 'GET',
-    credentials: 'include',
-    cache: 'no-cache',
-  });
-
-  const initializers: string[] = await jsInitializersResponse.json();
+  const initializersElement = document.getElementById('blazor-web-initializers');
+  const initializers: string[] = initializersElement?.innerText ? JSON.parse(initializersElement.innerText) : [];
   const jsInitializer = new JSInitializer(false, logger);
   await jsInitializer.importInitializersAsync(initializers, [options]);
   return jsInitializer;

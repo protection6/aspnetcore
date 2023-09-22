@@ -12,17 +12,27 @@ import { fetchAndInvokeInitializers } from './JSInitializers/JSInitializers.Serv
 import { RootComponentManager } from './Services/RootComponentManager';
 
 let started = false;
+let initializersPromise: Promise<void> | undefined;
 let appState: string;
 let circuit: CircuitManager;
 let options: CircuitStartOptions;
 let logger: ConsoleLogger;
 
-export function setCircuitOptions(circuitUserOptions?: Partial<CircuitStartOptions>) {
+export function setCircuitOptions(initializersReady: Promise<Partial<CircuitStartOptions>>) {
   if (options) {
     throw new Error('Circuit options have already been configured.');
   }
 
-  options = resolveOptions(circuitUserOptions);
+  if (options) {
+    throw new Error('WebAssembly options have already been configured.');
+  }
+
+  initializersPromise = setOptions(initializersReady);
+
+  async function setOptions(initializers: Promise<Partial<CircuitStartOptions>>): Promise<void> {
+    const configuredOptions = await initializers;
+    options = resolveOptions(configuredOptions);
+  }
 }
 
 export async function startServer(components: RootComponentManager<ServerComponentDescriptor>): Promise<void> {
@@ -31,6 +41,10 @@ export async function startServer(components: RootComponentManager<ServerCompone
   }
 
   started = true;
+
+  await initializersPromise;
+  const jsInitializer = await fetchAndInvokeInitializers(options);
+
   appState = discoverServerPersistedState(document) || '';
   logger = new ConsoleLogger(options.logLevel);
   circuit = new CircuitManager(components, appState, options, logger);
@@ -63,8 +77,6 @@ export async function startServer(components: RootComponentManager<ServerCompone
 
   Blazor._internal.forceCloseConnection = () => circuit.disconnect();
   Blazor._internal.sendJSDataStream = (data: ArrayBufferView | Blob, streamId: number, chunkSize: number) => circuit.sendJsDataStream(data, streamId, chunkSize);
-
-  const jsInitializer = await fetchAndInvokeInitializers(options);
 
   const circuitStarted = await circuit.start();
   if (!circuitStarted) {
@@ -119,6 +131,6 @@ export function isCircuitAvailable(): boolean {
   return !circuit.isDisposedOrDisposing();
 }
 
-export function updateServerRootComponents(operations: string): Promise<void>|undefined {
+export function updateServerRootComponents(operations: string): Promise<void> | undefined {
   return circuit.updateRootComponents(operations);
 }

@@ -6,7 +6,7 @@ import { AfterBlazorServerStartedCallback, BeforeBlazorServerStartedCallback, Ci
 import { LogLevel, Logger } from '../Platform/Logging/Logger';
 import { AfterBlazorWebAssemblyStartedCallback, BeforeBlazorWebAssemblyStartedCallback, WebAssemblyInitializers, WebAssemblyStartOptions } from '../Platform/WebAssemblyStartOptions';
 import { WebStartOptions } from '../Platform/WebStartOptions';
-import { firstRendererAttached } from '../Rendering/WebRendererInteropMethods';
+import { getRendererAttachedPromise } from '../Rendering/WebRendererInteropMethods';
 
 type BeforeBlazorStartedCallback = (...args: unknown[]) => Promise<void>;
 export type AfterBlazorStartedCallback = (blazor: typeof Blazor) => Promise<void>;
@@ -26,7 +26,12 @@ export type BlazorInitializer = {
 export class JSInitializer {
   private afterStartedCallbacks: AfterBlazorStartedCallback[] = [];
 
-  constructor(private singleRuntime = true, private logger?: Logger, private afterstartedCallbacks?: AfterBlazorStartedCallback[]) {
+  constructor(
+    private singleRuntime = true,
+    private logger?: Logger,
+    afterstartedCallbacks?: AfterBlazorStartedCallback[],
+    private webRendererId: number = 0
+  ) {
     if (afterstartedCallbacks) {
       this.afterStartedCallbacks.push(...afterstartedCallbacks);
     }
@@ -63,8 +68,8 @@ export class JSInitializer {
         initializerModule: Partial<BlazorInitializer>, initializerArguments: unknown[]): void | PromiseLike<void> {
         const options = initializerArguments[0] as WebStartOptions;
         const { beforeStart, afterStarted, beforeWebStart, afterWebStarted, beforeWebAssemblyStart, afterWebAssemblyStarted, beforeServerStart, afterServerStarted } = initializerModule;
-        const runtimeSpecificExports = beforeWebStart || afterWebStarted || beforeWebAssemblyStart || afterWebAssemblyStarted || beforeServerStart || afterServerStarted;
-        const hasOnlyClassicInitializers = !runtimeSpecificExports && (beforeStart || afterStarted);
+        const runtimeSpecificExports = !!(beforeWebStart || afterWebStarted || beforeWebAssemblyStart || afterWebAssemblyStarted || beforeServerStart || afterServerStarted);
+        const hasOnlyClassicInitializers = !!(!runtimeSpecificExports && (beforeStart || afterStarted));
         const runLegacyInitializers = hasOnlyClassicInitializers && options.enableClassicInitializers;
         if (hasOnlyClassicInitializers && !options.enableClassicInitializers) {
           // log warning "classic initializers will be ignored when multiple runtimes are used".
@@ -132,7 +137,10 @@ export class JSInitializer {
   }
 
   async invokeAfterStartedCallbacks(blazor: typeof Blazor): Promise<void> {
-    await firstRendererAttached;
+    const attached = getRendererAttachedPromise(this.webRendererId);
+    if (attached) {
+      await attached;
+    }
     await Promise.all(this.afterStartedCallbacks.map(callback => callback(blazor)));
   }
 }
