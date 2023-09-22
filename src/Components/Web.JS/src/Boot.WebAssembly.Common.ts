@@ -175,7 +175,7 @@ export async function startWebAssembly(components: RootComponentManager<WebAssem
   // At this point .NET has been initialized (and has yielded), we can't await the promise becasue it will
   // only end when the app finishes running
   const initializer = getInitializer();
-  return initializer.invokeAfterStartedCallbacks(Blazor);
+  initializer.invokeAfterStartedCallbacks(Blazor);
 }
 
 export function hasStartedWebAssembly(): boolean {

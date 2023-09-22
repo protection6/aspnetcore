@@ -2,11 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Unicode;
 using Microsoft.AspNetCore.Components.RenderTree;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -77,13 +80,14 @@ internal partial class EndpointHtmlRenderer
     }
 
     internal async Task EmitInitializersIfNecessary(HttpContext httpContext, TextWriter writer)
-    {
+    {        
         if (_options.JavaScriptInitializers != null &&
             !IsProgressivelyEnhancedNavigation(httpContext.Request))
         {
-            await writer.WriteAsync("<script id=\"blazor-web-initializers\" type=\"application/json\">");
-            await writer.WriteAsync(_options.JavaScriptInitializers);
-            await writer.WriteAsync("</script>");
+            var initializersBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(_options.JavaScriptInitializers));
+            await writer.WriteAsync("<!--Blazor-Web-Initializers:");
+            await writer.WriteAsync(initializersBase64);
+            await writer.WriteAsync("-->");
         }
     }
 

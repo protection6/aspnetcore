@@ -22,7 +22,7 @@ import { attachComponentDescriptorHandler, registerAllComponentDescriptors } fro
 import { JSEventRegistry } from './Services/JSEventRegistry';
 import { fetchAndInvokeInitializers } from './JSInitializers/JSInitializers.Web';
 import { ConsoleLogger } from './Platform/Logging/Loggers';
-import { LogLevel, Logger } from './Platform/Logging/Logger';
+import { LogLevel } from './Platform/Logging/Logger';
 import { resolveOptions } from './Platform/Circuits/CircuitStartOptions';
 import { JSInitializer } from './JSInitializers/JSInitializers';
 
