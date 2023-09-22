@@ -31,7 +31,6 @@ export function afterWebAssemblyStarted() {
 export function beforeServerStart(options) {
     options.circuitHandlers.push({
         onCircuitOpened: () => {
-            debugger;
             appendElement('classic-and-modern-circuit-opened', 'Classic and modern "circuitOpened"');
         },
         onCircuitClosed: () => appendElement('classic-and-modern-circuit-closed', 'Classic and modern "circuitClosed"')

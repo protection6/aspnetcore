@@ -53,7 +53,7 @@ const defaultOptions: CircuitStartOptions = {
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   configureSignalR: (_) => { },
   logLevel: LogLevel.Warning,
-  initializers: { beforeStart: [], afterStarted: [] },
+  initializers: undefined!,
   circuitHandlers: [],
   reconnectionOptions: {
     maxRetries: 8,
