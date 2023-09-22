@@ -1,11 +1,9 @@
 export function beforeStart(options) {
     appendElement('classic-before-start', 'Classic "beforeStart"');
-    console.log('Classic "beforeStart"');
 }
 
 export function afterStarted() {
     appendElement('classic-after-started', 'Classic "afterStarted"');
-    console.log('Classic "afterStarted"');
 }
 
 function appendElement(id, text) {
