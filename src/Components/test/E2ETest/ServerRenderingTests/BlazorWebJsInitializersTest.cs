@@ -1,10 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Runtime.Serialization;
-using BasicTestApp;
 using Components.TestServer.RazorComponents;
-using Microsoft.AspNetCore.Components.E2ETest;
 using Microsoft.AspNetCore.Components.E2ETest.Infrastructure;
 using Microsoft.AspNetCore.Components.E2ETest.Infrastructure.ServerFixtures;
 using Microsoft.AspNetCore.E2ETesting;
@@ -31,7 +28,7 @@ public class BlazorWebJsInitializersTest : ServerTestBase<BasicTestAppServerSite
 
     [Theory]
     [MemberData(nameof(InitializerTestData))]
-    public void InitializersWork(bool streaming, bool webassembly, bool server, string[] expectedInvokedCallbacks)
+    public void InitializersRunsModernCallbacksByDefaultWhenPresent(bool streaming, bool webassembly, bool server, List<string> expectedInvokedCallbacks)
     {
         var url = $"{ServerPathBase}/initializers?streaming={streaming}&wasm={webassembly}&server={server}";
         Navigate(url);
@@ -41,8 +38,7 @@ public class BlazorWebJsInitializersTest : ServerTestBase<BasicTestAppServerSite
             Browser.Exists(By.Id(callback));
         }
 
-        var jsExecutor = (IJavaScriptExecutor)Browser;
-        jsExecutor.ExecuteScript("""document.getElementById('initializers-content').replaceChildren([])""");
+        Browser.Equal(expectedInvokedCallbacks.Count, () => Browser.FindElements(By.CssSelector("#initializers-content > p")).Count);
 
         if (server)
         {
@@ -51,18 +47,40 @@ public class BlazorWebJsInitializersTest : ServerTestBase<BasicTestAppServerSite
         }
     }
 
-    public static TheoryData<bool, bool, bool, string[]> InitializerTestData()
+    [Theory]
+    [MemberData(nameof(InitializerTestData))]
+    public void InitializersRunsClassicInitializersWhenEnabled(bool streaming, bool webassembly, bool server, List<string> expectedInvokedCallbacks)
     {
-        var result = new TheoryData<bool, bool, bool, string[]>
+        List<string> expectedCallbacks = ["classic-before-start", "classic-after-started", ..expectedInvokedCallbacks];
+        var url = $"{ServerPathBase}/initializers?streaming={streaming}&wasm={webassembly}&server={server}&enable-classic-initializers=true";
+        Navigate(url);
+
+        foreach (var callback in expectedCallbacks)
         {
-            { false, false, false, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started"] },
-            { false, false, true, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-server-start", "classic-and-modern-after-server-started", "classic-and-modern-circuit-opened"] },
-            { false, true, false, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-web-assembly-start", "classic-and-modern-after-web-assembly-started"] },
-            { false, true, true, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-server-start", "classic-and-modern-circuit-opened", "classic-and-modern-after-server-started", "classic-and-modern-before-web-assembly-start", "classic-and-modern-after-web-assembly-started"] },
-            { true, false, false, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started"] },
-            { true, false, true, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-server-start", "classic-and-modern-after-server-started", "classic-and-modern-circuit-opened"] },
-            { true, true, false, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-web-assembly-start", "classic-and-modern-after-web-assembly-started"] },
-            { true, true, true, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-server-start", "classic-and-modern-circuit-opened", "classic-and-modern-after-server-started", "classic-and-modern-before-web-assembly-start", "classic-and-modern-after-web-assembly-started"] }
+            Browser.Exists(By.Id(callback));
+        }
+
+        Browser.Equal(expectedCallbacks.Count, () => Browser.FindElements(By.CssSelector("#initializers-content > p")).Count);
+
+        if (server)
+        {
+            Browser.Click(By.Id("remove-server-component"));
+            Browser.Exists(By.Id("classic-and-modern-circuit-closed"));
+        }
+    }
+
+    public static TheoryData<bool, bool, bool, List<string>> InitializerTestData()
+    {
+        var result = new TheoryData<bool, bool, bool, List<string>>
+        {
+            { false, false, false, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started","modern-before-web-start", "modern-after-web-started"] },
+            { false, false, true, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-server-start", "classic-and-modern-after-server-started", "classic-and-modern-circuit-opened", "modern-before-web-start", "modern-after-web-started", "modern-before-server-start", "modern-after-server-started", "modern-circuit-opened" ] },
+            { false, true, false, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-web-assembly-start", "classic-and-modern-after-web-assembly-started", "modern-before-web-start", "modern-after-web-started", "modern-before-web-assembly-start", "modern-after-web-assembly-started"] },
+            { false, true, true, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-server-start", "classic-and-modern-circuit-opened", "classic-and-modern-after-server-started", "classic-and-modern-before-web-assembly-start", "classic-and-modern-after-web-assembly-started", "modern-before-web-start", "modern-after-web-started", "modern-before-server-start", "modern-circuit-opened", "modern-after-server-started", "modern-before-web-assembly-start", "modern-after-web-assembly-started"] },
+            { true, false, false, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started","modern-before-web-start", "modern-after-web-started"] },
+            { true, false, true, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-server-start", "classic-and-modern-after-server-started", "classic-and-modern-circuit-opened", "modern-before-web-start", "modern-after-web-started", "modern-before-server-start", "modern-after-server-started", "modern-circuit-opened" ] },
+            { true, true, false, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-web-assembly-start", "classic-and-modern-after-web-assembly-started", "modern-before-web-start", "modern-after-web-started", "modern-before-web-assembly-start", "modern-after-web-assembly-started"] },
+            { true, true, true, ["classic-and-modern-before-web-start", "classic-and-modern-after-web-started", "classic-and-modern-before-server-start", "classic-and-modern-circuit-opened", "classic-and-modern-after-server-started", "classic-and-modern-before-web-assembly-start", "classic-and-modern-after-web-assembly-started", "modern-before-web-start", "modern-after-web-started", "modern-before-server-start", "modern-circuit-opened", "modern-after-server-started", "modern-before-web-assembly-start", "modern-after-web-assembly-started"] },
         };
 
         return result;
