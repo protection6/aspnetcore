@@ -21,7 +21,7 @@ public class BlazorWebJsInitializersTest : ServerTestBase<BasicTestAppServerSite
     {
     }
 
-    public override Task InitializeAsync(string isolationContext)
+    public override Task InitializeAsync()
     {
         return base.InitializeAsync(BrowserFixture.StreamingContext);
     }
