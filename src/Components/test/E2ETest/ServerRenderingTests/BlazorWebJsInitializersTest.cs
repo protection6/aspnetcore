@@ -44,7 +44,6 @@ public class BlazorWebJsInitializersTest : ServerTestBase<BasicTestAppServerSite
         var jsExecutor = (IJavaScriptExecutor)Browser;
         jsExecutor.ExecuteScript("""document.getElementById('initializers-content').replaceChildren([])""");
 
-
         if (server)
         {
             Browser.Click(By.Id("remove-server-component"));
