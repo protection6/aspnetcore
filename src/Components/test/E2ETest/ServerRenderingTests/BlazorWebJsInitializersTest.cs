@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.Serialization;
 using BasicTestApp;
 using Components.TestServer.RazorComponents;
 using Microsoft.AspNetCore.Components.E2ETest;
@@ -23,16 +24,31 @@ public class BlazorWebJsInitializersTest : ServerTestBase<BasicTestAppServerSite
     {
     }
 
+    public override Task InitializeAsync(string isolationContext)
+    {
+        return base.InitializeAsync(BrowserFixture.StreamingContext);
+    }
+
     [Theory]
     [MemberData(nameof(InitializerTestData))]
     public void InitializersWork(bool streaming, bool webassembly, bool server, string[] expectedInvokedCallbacks)
     {
-        var url = $"{ServerPathBase}/jsinitializers?streaming={streaming}&wasm={webassembly}&server={server}";
+        var url = $"{ServerPathBase}/initializers?streaming={streaming}&wasm={webassembly}&server={server}";
         Navigate(url);
 
         foreach (var callback in expectedInvokedCallbacks)
         {
             Browser.Exists(By.Id(callback));
+        }
+
+        var jsExecutor = (IJavaScriptExecutor)Browser;
+        jsExecutor.ExecuteScript("""document.getElementById('initializers-content').replaceChildren([])""");
+
+
+        if (server)
+        {
+            Browser.Click(By.Id("remove-server-component"));
+            Browser.Exists(By.Id("classic-and-modern-circuit-closed"));
         }
     }
 
