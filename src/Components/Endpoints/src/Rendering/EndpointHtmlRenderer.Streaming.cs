@@ -5,11 +5,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Unicode;
 using Microsoft.AspNetCore.Components.RenderTree;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -80,7 +78,7 @@ internal partial class EndpointHtmlRenderer
     }
 
     internal async Task EmitInitializersIfNecessary(HttpContext httpContext, TextWriter writer)
-    {        
+    {
         if (_options.JavaScriptInitializers != null &&
             !IsProgressivelyEnhancedNavigation(httpContext.Request))
         {

@@ -51,8 +51,9 @@ public class BlazorWebJsInitializersTest : ServerTestBase<BasicTestAppServerSite
     [MemberData(nameof(InitializerTestData))]
     public void InitializersRunsClassicInitializersWhenEnabled(bool streaming, bool webassembly, bool server, List<string> expectedInvokedCallbacks)
     {
+        EnableClassicInitializers(Browser);
         List<string> expectedCallbacks = ["classic-before-start", "classic-after-started", ..expectedInvokedCallbacks];
-        var url = $"{ServerPathBase}/initializers?streaming={streaming}&wasm={webassembly}&server={server}&enable-classic-initializers=true";
+        var url = $"{ServerPathBase}/initializers?streaming={streaming}&wasm={webassembly}&server={server}";
         Navigate(url);
 
         foreach (var callback in expectedCallbacks)
@@ -67,6 +68,12 @@ public class BlazorWebJsInitializersTest : ServerTestBase<BasicTestAppServerSite
             Browser.Click(By.Id("remove-server-component"));
             Browser.Exists(By.Id("classic-and-modern-circuit-closed"));
         }
+    }
+
+    private void EnableClassicInitializers(IWebDriver browser)
+    {
+        browser.Navigate().GoToUrl($"{new Uri(_serverFixture.RootUri, ServerPathBase)}/");
+        ((IJavaScriptExecutor)browser).ExecuteScript("sessionStorage.setItem('enable-classic-initializers', 'true')");
     }
 
     public static TheoryData<bool, bool, bool, List<string>> InitializerTestData()

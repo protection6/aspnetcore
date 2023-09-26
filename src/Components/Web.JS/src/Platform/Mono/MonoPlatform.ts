@@ -213,6 +213,7 @@ function prepareRuntimeConfig(options: Partial<WebAssemblyStartOptions>, onConfi
         WebRendererId.WebAssembly
       );
     } else {
+      await invokeLibraryInitializers('beforeStart', initializerArguments);
       jsInitializer = await fetchAndInvokeInitializers(options);
     }
   };

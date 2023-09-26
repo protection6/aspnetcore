@@ -11,12 +11,13 @@ import { discoverServerPersistedState, ServerComponentDescriptor } from './Servi
 import { fetchAndInvokeInitializers } from './JSInitializers/JSInitializers.Server';
 import { RootComponentManager } from './Services/RootComponentManager';
 
-let started = false;
 let initializersPromise: Promise<void> | undefined;
 let appState: string;
 let circuit: CircuitManager;
 let options: CircuitStartOptions;
 let logger: ConsoleLogger;
+let serverStartPromise: Promise<void>;
+let circuitStarting: Promise<boolean> | undefined;
 
 export function setCircuitOptions(initializersReady: Promise<Partial<CircuitStartOptions>>) {
   if (options) {
@@ -35,80 +36,95 @@ export function setCircuitOptions(initializersReady: Promise<Partial<CircuitStar
   }
 }
 
-export async function startServer(components: RootComponentManager<ServerComponentDescriptor>): Promise<void> {
-  if (started) {
+export function startServer(components: RootComponentManager<ServerComponentDescriptor>): Promise<void> {
+  if (serverStartPromise !== undefined) {
     throw new Error('Blazor Server has already started.');
   }
 
-  started = true;
+  serverStartPromise = new Promise(startServerCore);
 
-  await initializersPromise;
-  const jsInitializer = await fetchAndInvokeInitializers(options);
+  return serverStartPromise;
 
-  appState = discoverServerPersistedState(document) || '';
-  logger = new ConsoleLogger(options.logLevel);
-  circuit = new CircuitManager(components, appState, options, logger);
+  async function startServerCore(resolve: () => void, _: any) {
+    await initializersPromise;
+    const jsInitializer = await fetchAndInvokeInitializers(options);
 
-  logger.log(LogLevel.Information, 'Starting up Blazor server-side application.');
+    appState = discoverServerPersistedState(document) || '';
+    logger = new ConsoleLogger(options.logLevel);
+    circuit = new CircuitManager(components, appState, options, logger);
 
-  Blazor.reconnect = async () => {
-    if (circuit.didRenderingFail()) {
-      // We can't reconnect after a failure, so exit early.
-      return false;
+    logger.log(LogLevel.Information, 'Starting up Blazor server-side application.');
+
+    Blazor.reconnect = async () => {
+      if (circuit.didRenderingFail()) {
+        // We can't reconnect after a failure, so exit early.
+        return false;
+      }
+
+      if (!(await circuit.reconnect())) {
+        logger.log(LogLevel.Information, 'Reconnection attempt to the circuit was rejected by the server. This may indicate that the associated state is no longer available on the server.');
+        return false;
+      }
+
+      return true;
+    };
+
+    Blazor.defaultReconnectionHandler = new DefaultReconnectionHandler(logger);
+    options.reconnectionHandler = options.reconnectionHandler || Blazor.defaultReconnectionHandler;
+
+    // Configure navigation via SignalR
+    Blazor._internal.navigationManager.listenForNavigationEvents((uri: string, state: string | undefined, intercepted: boolean): Promise<void> => {
+      return circuit.sendLocationChanged(uri, state, intercepted);
+    }, (callId: number, uri: string, state: string | undefined, intercepted: boolean): Promise<void> => {
+      return circuit.sendLocationChanging(callId, uri, state, intercepted);
+    });
+
+    Blazor._internal.forceCloseConnection = () => circuit.disconnect();
+    Blazor._internal.sendJSDataStream = (data: ArrayBufferView | Blob, streamId: number, chunkSize: number) => circuit.sendJsDataStream(data, streamId, chunkSize);
+
+    const circuitStarted = await circuit.start();
+    if (!circuitStarted) {
+      logger.log(LogLevel.Error, 'Failed to start the circuit.');
+      return;
     }
 
-    if (!(await circuit.reconnect())) {
-      logger.log(LogLevel.Information, 'Reconnection attempt to the circuit was rejected by the server. This may indicate that the associated state is no longer available on the server.');
-      return false;
-    }
+    const cleanup = () => {
+      circuit.sendDisconnectBeacon();
+    };
 
-    return true;
-  };
+    Blazor.disconnect = cleanup;
 
-  Blazor.defaultReconnectionHandler = new DefaultReconnectionHandler(logger);
-  options.reconnectionHandler = options.reconnectionHandler || Blazor.defaultReconnectionHandler;
+    window.addEventListener('unload', cleanup, { capture: false, once: true });
 
-  // Configure navigation via SignalR
-  Blazor._internal.navigationManager.listenForNavigationEvents((uri: string, state: string | undefined, intercepted: boolean): Promise<void> => {
-    return circuit.sendLocationChanged(uri, state, intercepted);
-  }, (callId: number, uri: string, state: string | undefined, intercepted: boolean): Promise<void> => {
-    return circuit.sendLocationChanging(callId, uri, state, intercepted);
-  });
+    logger.log(LogLevel.Information, 'Blazor server-side application started.');
 
-  Blazor._internal.forceCloseConnection = () => circuit.disconnect();
-  Blazor._internal.sendJSDataStream = (data: ArrayBufferView | Blob, streamId: number, chunkSize: number) => circuit.sendJsDataStream(data, streamId, chunkSize);
-
-  const circuitStarted = await circuit.start();
-  if (!circuitStarted) {
-    logger.log(LogLevel.Error, 'Failed to start the circuit.');
-    return;
+    jsInitializer.invokeAfterStartedCallbacks(Blazor);
+    resolve();
   }
-
-  const cleanup = () => {
-    circuit.sendDisconnectBeacon();
-  };
-
-  Blazor.disconnect = cleanup;
-
-  window.addEventListener('unload', cleanup, { capture: false, once: true });
-
-  logger.log(LogLevel.Information, 'Blazor server-side application started.');
-
-  jsInitializer.invokeAfterStartedCallbacks(Blazor);
 }
 
-export function startCircuit(): Promise<boolean> {
-  if (!started) {
+export async function startCircuit(): Promise<boolean> {
+  if (!serverStartPromise) {
     throw new Error('Cannot start the circuit until Blazor Server has started.');
   }
 
-  if (circuit.didRenderingFail()) {
-    // We can't start a new circuit after a rendering failure because the renderer
-    // might be in an invalid state.
-    return Promise.resolve(false);
+  if (circuit && !circuit.isDisposedOrDisposing()) {
+    return true;
   }
 
-  if (circuit.isDisposedOrDisposing()) {
+  if (circuitStarting) {
+    return await circuitStarting;
+  }
+
+  await serverStartPromise;
+
+  if (circuit && circuit.didRenderingFail()) {
+    // We can't start a new circuit after a rendering failure because the renderer
+    // might be in an invalid state.
+    return false;
+  }
+
+  if (circuit && circuit.isDisposedOrDisposing()) {
     // If the current circuit is no longer available, create a new one.
     appState = discoverServerPersistedState(document) || '';
     circuit = new CircuitManager(circuit.getRootComponentManager(), appState, options, logger);
@@ -116,11 +132,20 @@ export function startCircuit(): Promise<boolean> {
 
   // Start the circuit. If the circuit has already started, this will return the existing
   // circuit start promise.
-  return circuit.start();
+  circuitStarting = circuit.start();
+  clearCircuitStarting(circuitStarting);
+  return circuitStarting;
+}
+
+async function clearCircuitStarting(circuitStartingPromise: Promise<boolean>) {
+  await circuitStartingPromise;
+  if (circuitStarting === circuitStartingPromise) {
+    circuitStarting = undefined;
+  }
 }
 
 export function hasStartedServer(): boolean {
-  return started;
+  return serverStartPromise !== undefined;
 }
 
 export async function disposeCircuit() {
@@ -128,9 +153,19 @@ export async function disposeCircuit() {
 }
 
 export function isCircuitAvailable(): boolean {
-  return !circuit.isDisposedOrDisposing();
+  return circuit && !circuit.isDisposedOrDisposing();
 }
 
 export function updateServerRootComponents(operations: string): Promise<void> | undefined {
-  return circuit.updateRootComponents(operations);
+  if (circuit && !circuit.isDisposedOrDisposing()) {
+    return circuit.updateRootComponents(operations);
+  } else {
+    scheduleWhenReady(operations);
+  }
+}
+async function scheduleWhenReady(operations: string) {
+  await serverStartPromise;
+  if (await startCircuit()) {
+    return circuit.updateRootComponents(operations);
+  }
 }
